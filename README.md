@@ -5,10 +5,6 @@
 
 ![小程序截图1](promote/IMAGE1.jpg)
 
-![小程序截图2](promote/IMAGE2.png)
-
-![小程序截图3](promote/IMAGE3.png)
-
 ![小程序截图4](promote/IMAGE4.jpg)
 
 ## 项目介绍
