@@ -148,7 +148,7 @@ def save_to_excel(data, filename):
 def main():
     # 示例省份城市列表
     locations = [
-        {'province': '广东省', 'city': '梅州市'}
+        {'province': '广东省', 'city': '湛江市'}
     ]
     
     for location in locations:
