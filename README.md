@@ -15,7 +15,7 @@
 2. **获取API密钥**：在控制台创建应用，获取 `KEY`。
 3. **配置项目**：
    - 复制 `config_template.py` 为 `config.py`。
-   - 在 `config.py` 中设置 `KEY` 为你在腾讯位置服务获取的密钥。
+   - 在 `config.py` 中设置 `KEY` 为你在腾讯位置服务获取的密钥。格式是KEY = "XXXXX-XXXXX-XXXXX-XXXXX-XXXXX-XXXXX"
 
 ## 环境准备
 本项目使用Python 3.x，所需依赖可通过以下命令安装：

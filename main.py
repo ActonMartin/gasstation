@@ -78,20 +78,47 @@ def get_gas_stations(city, page_index=1, page_size=20):
         print(f'请求失败: {e}', flush=True)
         return None
 
-def save_to_excel(data, filename):
+def save_to_excel(data, filename, pages_data=None):
     """将数据保存到Excel文件
 
     Args:
         data (dict): API返回的数据
         filename (str): 文件名
+        pages_data (list): 每一页的数据列表
     """
     if not data or 'data' not in data:
         return
     
-    # 提取所需数据
-    rows = []
+    # 提取所有数据
+    all_rows = []
+    all_idx = 1
+    for item in data['data']:
+        station_id = item.get('id', '')
+        station_type = item.get('category', '')
+        if station_type == '汽车:加油站:中石化':
+            station_type_each = '中石化'
+        elif station_type == '汽车:加油站:中石油':
+            station_type_each = '中石油'
+        else:
+            station_type_each = '其他'
+        row = {
+            '序号': str(all_idx),
+            'id_tx': station_id,
+            '加油站名称': item.get('title', ''),
+            '加油站类型': station_type_each,
+            '优惠信息表头': '暂无优惠，可上报数据',
+            '优惠信息详细': '暂无优惠，可上报数据',
+            '加油站地址': item.get('address', ''),
+            '加油站电话': item.get('tel', ''),
+            '加油站坐标': json.dumps(item.get('location', {}), ensure_ascii=False),
+        }
+        all_rows.append(row)
+        all_idx += 1
+    
+    # 提取去重后的数据
+    unique_rows = []
+    unique_idx = 1
     seen_ids = set()  # 记录已出现的加油站ID
-    unique_idx = 1  # 去重后的连续序号
     for item in data['data']:
         station_id = item.get('id', '')
         if station_id in seen_ids:
@@ -105,50 +132,93 @@ def save_to_excel(data, filename):
         else:
             station_type_each = '其他'
         row = {
-        '序号': str(unique_idx),
-        '加油站ID': station_id,
-        '加油站名称': item.get('title', ''),
-        '加油站类型': station_type_each,
-        '优惠信息表头': '暂无优惠，可上报数据',
-        '优惠信息详细': '暂无优惠，可上报数据',
-        '加油站地址': item.get('address', ''),
-        '加油站电话': item.get('tel', ''),
-        '加油站坐标': json.dumps(item.get('location', {}), ensure_ascii=False),
+            '序号': str(unique_idx),
+            'id_tx': station_id,
+            '加油站名称': item.get('title', ''),
+            '加油站类型': station_type_each,
+            '优惠信息表头': '暂无优惠，可上报数据',
+            '优惠信息详细': '暂无优惠，可上报数据',
+            '加油站地址': item.get('address', ''),
+            '加油站电话': item.get('tel', ''),
+            '加油站坐标': json.dumps(item.get('location', {}), ensure_ascii=False),
         }
-        rows.append(row)
+        unique_rows.append(row)
         unique_idx += 1
     
-    # 创建DataFrame并保存为Excel
-    df = pd.DataFrame(rows)
-    df.to_excel(filename, index=False, engine='openpyxl')
+    # 创建DataFrame
+    df_all = pd.DataFrame(all_rows)
+    df_unique = pd.DataFrame(unique_rows)
     
-    # 调整列宽（使用openpyxl）
+    # 使用ExcelWriter保存到多个工作表
+    with pd.ExcelWriter(filename, engine='openpyxl') as writer:
+        df_all.to_excel(writer, sheet_name='所有数据', index=False)
+        df_unique.to_excel(writer, sheet_name='去重后数据', index=False)
+        
+        # 保存每一页的数据
+        if pages_data:
+            for i, page_data in enumerate(pages_data):
+                page_idx = i + 1
+                page_rows = []
+                page_row_idx = 1
+                for item in page_data:
+                    station_id = item.get('id', '')
+                    station_type = item.get('category', '')
+                    if station_type == '汽车:加油站:中石化':
+                        station_type_each = '中石化'
+                    elif station_type == '汽车:加油站:中石油':
+                        station_type_each = '中石油'
+                    else:
+                        station_type_each = '其他'
+                    row = {
+                        '序号': str(page_row_idx),
+                        'id_tx': station_id,
+                        '加油站名称': item.get('title', ''),
+                        '加油站类型': station_type_each,
+                        '优惠信息表头': '暂无优惠，可上报数据',
+                        '优惠信息详细': '暂无优惠，可上报数据',
+                        '加油站地址': item.get('address', ''),
+                        '加油站电话': item.get('tel', ''),
+                        '加油站坐标': json.dumps(item.get('location', {}), ensure_ascii=False),
+                    }
+                    page_rows.append(row)
+                    page_row_idx += 1
+                
+                if page_rows:
+                    df_page = pd.DataFrame(page_rows)
+                    df_page.to_excel(writer, sheet_name=f'page{page_idx}', index=False)
+    
+    # 调整列宽和对齐方式
     from openpyxl import load_workbook
     from openpyxl.utils import get_column_letter
+    from openpyxl.styles import Alignment
     
     wb = load_workbook(filename)
-    ws = wb.active
     
-    for column_cells in ws.columns:
-        max_length = 0
-        column = get_column_letter(column_cells[0].column)
-        for cell in column_cells:
-            try:
-                if len(str(cell.value)) > max_length:
-                    max_length = len(str(cell.value))
-            except:
-                pass
-        # 调整宽度（中文字符约占2个宽度单位，这里乘以1.2做适当扩展）
-        adjusted_width = max_length * 1.2
-        # 设置最小宽度为10，避免过窄
-        ws.column_dimensions[column].width = adjusted_width if adjusted_width > 10 else 10
+    # 调整所有工作表的列宽和对齐方式
+    for sheet_name in wb.sheetnames:
+        ws = wb[sheet_name]
+        for column_cells in ws.columns:
+            max_length = 0
+            column = get_column_letter(column_cells[0].column)
+            for cell in column_cells:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+                # 设置单元格水平和垂直居中对齐
+                cell.alignment = Alignment(horizontal='center', vertical='center')
+            # 调整宽度（中文字符约占2个宽度单位，这里乘以1.2做适当扩展）
+            adjusted_width = max_length * 1.2
+            # 设置最小宽度为10，避免过窄
+            ws.column_dimensions[column].width = adjusted_width if adjusted_width > 10 else 10
     
     wb.save(filename)
 
 def main():
     # 示例省份城市列表
     locations = [
-        {'province': '广东省', 'city': '湛江市'}
+        {'province': '甘肃省', 'city': '兰州市'}
     ]
     
     for location in locations:
@@ -161,35 +231,46 @@ def main():
         
         print(f'正在获取{province}{city}的加油站信息...', flush=True)
         # 先获取第一页数据以获取总数量
-        first_page = get_gas_stations(city, page_index=1)
+        page_size = 20
+        first_page = get_gas_stations(city, page_index=1, page_size=page_size)
         if not first_page or first_page.get('status') != 0:
             print(f'{city}加油站信息获取失败\n', flush=True)
             continue
         
         count = first_page.get('count', 0)
-        page_size = 20
+        print(f'{province}{city}共找到{count}个加油站\n', flush=True)
         total_pages = (count + page_size - 1) // page_size  # 计算总页数
-        all_data = first_page.get('data', [])  # 初始化数据列表
+        
+        # 获取第一页数据
+        first_page_data = first_page.get('data', [])
+        
+        # 初始化数据列表，创建新的列表避免引用问题
+        all_data = first_page_data[:]  # 创建一个新列表
+        
+        # 保存每一页的数据，同样创建新列表避免引用问题
+        pages_data = []
+        pages_data.append(first_page_data[:])  # 创建一个新列表
         
         # 循环获取剩余页面
         for page in range(2, total_pages + 1):
             print(f'正在获取第{page}/{total_pages}页数据...', flush=True)
-            result = get_gas_stations(city, page_index=page)
+            result = get_gas_stations(city, page_index=page, page_size=page_size)
             if result and result.get('status') == 0:
                 current_data = result.get('data', [])
                 all_data.extend(current_data)
+                pages_data.append(current_data)
             else:
                 print(f'第{page}页获取失败，跳过...')
+                pages_data.append([])  # 添加空列表表示该页获取失败
         
         if all_data:
-            # 保存合并后的数据到Excel文件
+            # 保存合并后的数据和每页数据到Excel文件
             filename = f'{province}_{city}_gas_stations.xlsx'
             file_path = os.path.join(province_folder, filename)
-            save_to_excel({'data': all_data}, file_path)
+            save_to_excel({'data': all_data}, file_path, pages_data)
             print(f'{province}{city}的加油站信息已保存到{file_path}', flush=True)
             
             # 打印统计信息
-            count = result.get('count', 0)
             print(f'{province}{city}共找到{count}个加油站\n', flush=True)
         else:
             print(f'{city}加油站信息获取失败\n', flush=True)
